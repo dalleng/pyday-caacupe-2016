@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from urlparse import urljoin
-
 import scrapy
 from w3lib.url import add_or_replace_parameter
-
 from scrapy.utils.response import open_in_browser
+
+from tripadvisor_restaurants_paraguay.items import RestaurantItemLoader
 
 
 class RestaurantsSpider(scrapy.Spider):
@@ -17,14 +16,11 @@ class RestaurantsSpider(scrapy.Spider):
     def parse(self, response):
         # open_in_browser(response)
         for restaurant in response.css('.shortSellDetails'):
-            yield {
-                'name': restaurant.css('.property_title::text').extract_first(),
-                'url': urljoin(
-                    response.url,
-                    restaurant.css('.property_title::attr(href)').extract_first()
-                ),
-                'cuisines': restaurant.css('.cuisine::text').extract()
-            }
+            il = RestaurantItemLoader(selector=restaurant)
+            il.add_css('name', '.property_title::text')
+            il.add_css('url', '.property_title::attr(href)')
+            il.add_css('cuisines', '.cuisine::text')
+            yield il.load_item()
 
         pagination_url = (
             'https://www.tripadvisor.com/RestaurantSearch?Action=PAGE'
@@ -33,5 +29,6 @@ class RestaurantsSpider(scrapy.Spider):
         )
         if not response.css('.nav.next.disabled'):
             offset = response.meta.get('offset', 0) + 30
-            pagination_url = add_or_replace_parameter(pagination_url, 'o', 'a{}'.format(offset))
+            pagination_url = add_or_replace_parameter(
+                pagination_url, 'o', 'a{}'.format(offset))
             yield scrapy.Request(pagination_url, meta={'offset': offset})
