@@ -14,13 +14,17 @@ class RestaurantsSpider(scrapy.Spider):
     )
 
     def parse(self, response):
-        # open_in_browser(response)
         for restaurant in response.css('.shortSellDetails'):
             il = RestaurantItemLoader(selector=restaurant)
             il.add_css('name', '.property_title::text')
             il.add_css('url', '.property_title::attr(href)')
             il.add_css('cuisines', '.cuisine::text')
-            yield il.load_item()
+            item = il.load_item()
+            yield scrapy.Request(
+                item['url'],
+                callback=self.parse_details,
+                meta=dict(item=item)
+            )
 
         pagination_url = (
             'https://www.tripadvisor.com/RestaurantSearch?Action=PAGE'
@@ -32,3 +36,9 @@ class RestaurantsSpider(scrapy.Spider):
             pagination_url = add_or_replace_parameter(
                 pagination_url, 'o', 'a{}'.format(offset))
             yield scrapy.Request(pagination_url, meta={'offset': offset})
+
+    def parse_details(self, response):
+        il = RestaurantItemLoader(response.meta['item'], response=response)
+        il.add_css('phone', '.phoneNumber::text')
+        il.add_css('locality', '.locality > span::text')
+        yield il.load_item()
