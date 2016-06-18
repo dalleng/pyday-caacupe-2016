@@ -1,16 +1,17 @@
 import json
+import threading
 
 import requests
 from bs4 import BeautifulSoup
 
 
-def get_details(url):
-    response = requests.get(url)
+def get_details(current_resto):
+    response = requests.get(current_resto['url'])
     soup = BeautifulSoup(response.text, 'html.parser')
-    return {
-        'locality': soup.find(class_='locality').text[:-2],
+    current_resto.update({
+        'locality': soup.find(class_='locality').span.text,
         'phone': getattr(soup.find(class_='phoneNumber'), 'text', '')
-    }
+    })
 
 
 def main():
@@ -18,8 +19,9 @@ def main():
     response = requests.get(base_url + '/Restaurants-g294079-Paraguay.html')
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    restaurants = soup.find_all('div', class_='shortSellDetails')
+    threads = []
     results = []
+    restaurants = soup.find_all('div', class_='shortSellDetails')
 
     for restaurant in restaurants:
         link = restaurant.find(class_='property_title')
@@ -28,8 +30,13 @@ def main():
             'url': base_url + link['href'],
             'cuisines': [c.text for c in restaurant.select('.cuisine')]
         }
-        current_resto.update(get_details(current_resto['url']))
+        t = threading.Thread(target=get_details, args=(current_resto,))
+        threads.append(t)
+        t.start()
         results.append(current_resto)
+
+    for t in threads:
+        t.join()
 
     print json.dumps(results, indent=2)
 
